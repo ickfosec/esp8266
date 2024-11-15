@@ -25,15 +25,18 @@ const int maxPixels = 10; // Max number of animated pixels for normal animation
 Pixel pixels[maxPixels];
 int pixelCount = 0;
 int uniqueBadgeCount = 0; // Count of unique BadgeBuddy BSSIDs
-bool usePinwheelPattern = false; // Flag to switch between animations
+bool useFallingCodePattern = false; // Flag to switch between animations
 
 unsigned long lastScanTime = 0;
 const unsigned long scanInterval = 30000; // 30 seconds
 
-// Pinwheel pattern frame index
-int pinwheelFrame = 0;
-unsigned long lastPinwheelUpdate = 0;
-const unsigned long pinwheelSpeed = 100; // Speed of pinwheel rotation
+// Falling code variables
+const int columns = 8; // 8 columns for the LED matrix
+int fallPos[columns]; // Tracks the y-position of the falling pixel in each column
+bool columnActive[columns]; // Whether a column has an active falling pixel
+
+unsigned long lastFallingUpdate = 0;
+const unsigned long fallingSpeed = 100; // Speed of falling pixels
 
 void setup() {
   Serial.begin(115200);
@@ -42,6 +45,12 @@ void setup() {
   lc.shutdown(0, false);
   lc.setIntensity(0, 8); // Adjust brightness here
   lc.clearDisplay(0);
+
+  // Initialize falling pixel positions
+  for (int i = 0; i < columns; ++i) {
+    fallPos[i] = random(8); // Random initial position
+    columnActive[i] = false; // No active falling pixels initially
+  }
 
   // Illuminate LEDs during startup
   illuminateLoadingLEDs();
@@ -64,8 +73,8 @@ void loop() {
     lastScanTime = millis();
   }
 
-  if (usePinwheelPattern) {
-    updatePinwheel();
+  if (useFallingCodePattern) {
+    updateFallingCode();
   } else {
     updatePixels();
   }
@@ -94,11 +103,11 @@ void scanNetworks() {
     }
   }
 
-  // If 10 or more other badges are detected, switch to pinwheel pattern
-  usePinwheelPattern = (uniqueBadgeCount > 9);
+  // If more than 9 other badges are detected, switch to falling code pattern
+  useFallingCodePattern = (uniqueBadgeCount > 8);
 
   // For normal animation, calculate pixel count based on unique badges + 1, but limit to maxPixels
-  if (!usePinwheelPattern) {
+  if (!useFallingCodePattern) {
     pixelCount = min(uniqueBadgeCount + 1, maxPixels);
 
     // Initialize or reset pixels for normal animation
@@ -130,29 +139,43 @@ void updatePixels() {
   }
 }
 
-// Pinwheel animation frames
-const byte pinwheelFrames[4][8] = {
-  {B00011000, B00100100, B01000010, B10000001, B10000001, B01000010, B00100100, B00011000}, // Frame 1
-  {B10000001, B11000011, B01100110, B00111100, B00111100, B01100110, B11000011, B10000001}, // Frame 2
-  {B00011000, B00100100, B01000010, B10000001, B10000001, B01000010, B00100100, B00011000}, // Frame 3
-  {B10000001, B11000011, B01100110, B00111100, B00111100, B01100110, B11000011, B10000001}  // Frame 4
-};
-
-void updatePinwheel() {
+void updateFallingCode() {
   unsigned long currentMillis = millis();
-  if (currentMillis - lastPinwheelUpdate > pinwheelSpeed) {
-    pinwheelFrame = (pinwheelFrame + 1) % 4;
-    lastPinwheelUpdate = currentMillis;
+  if (currentMillis - lastFallingUpdate > fallingSpeed) {
+    // Update each column's falling position
+    for (int col = 0; col < columns; ++col) {
+      if (columnActive[col]) {
+        fallPos[col]++;
+
+        // Reset if it falls beyond the bottom
+        if (fallPos[col] > 7) {
+          fallPos[col] = 0;
+          columnActive[col] = false; // Deactivate this column
+        }
+      } else {
+        // Randomly activate a new falling pixel
+        if (random(10) < 2) { // 20% chance to activate
+          fallPos[col] = 0;
+          columnActive[col] = true;
+        }
+      }
+    }
+
+    lastFallingUpdate = currentMillis;
   }
 }
 
 void displayPixels() {
   lc.clearDisplay(0);
-  if (usePinwheelPattern) {
-    for (int i = 0; i < 8; ++i) {
-      lc.setRow(0, i, pinwheelFrames[pinwheelFrame][i]);
+  if (useFallingCodePattern) {
+    // Display the falling code animation
+    for (int col = 0; col < columns; ++col) {
+      if (columnActive[col]) {
+        lc.setLed(0, fallPos[col], col, true);
+      }
     }
   } else {
+    // Display the normal animation with bouncing pixels
     for (int i = 0; i < pixelCount; ++i) {
       lc.setLed(0, pixels[i].y, pixels[i].x, true);
     }
@@ -160,12 +183,19 @@ void displayPixels() {
 }
 
 void illuminateLoadingLEDs() {
-  lc.setRow(0, 0, B01010101);
-  lc.setRow(0, 1, B10101010);
-  lc.setRow(0, 2, B01010101);
-  lc.setRow(0, 3, B10101010);
-  lc.setRow(0, 4, B01010101);
-  lc.setRow(0, 5, B10101010);
-  lc.setRow(0, 6, B01010101);
-  lc.setRow(0, 7, B10101010);
+ // Display a question mark symbol
+  byte questionMark[8] = {
+    B00111100,
+    B01000010,
+    B00000010,
+    B00000100,
+    B00001000,
+    B00000000,
+    B00001000,
+    B00000000
+  };
+
+  for (int i = 0; i < 8; i++) {
+    lc.setRow(0, i, questionMark[i]);
+  }
 }
