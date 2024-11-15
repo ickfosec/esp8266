@@ -1,3 +1,4 @@
+// I relied heavily on ChatGPT to cleanup, improve and comment this code. This is the code that was on the badges during GrrCon 2024, however your mileage may vary should you choose to use this yourself. 
 #include <LedControl.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
